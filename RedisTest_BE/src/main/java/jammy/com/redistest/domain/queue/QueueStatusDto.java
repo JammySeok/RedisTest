@@ -1,4 +1,4 @@
-package jammy.com.redistest.common;
+package jammy.com.redistest.domain.queue;
 
 public record QueueStatusDto (
         Long rank,      // 대기 순번 (입장 완료시 0 또는 -1)

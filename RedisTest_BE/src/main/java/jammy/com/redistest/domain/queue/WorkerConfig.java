@@ -1,6 +1,5 @@
-package jammy.com.redistest.common;
+package jammy.com.redistest.domain.queue;
 
-import jammy.com.redistest.domain.queue.QueueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -19,7 +18,7 @@ public class WorkerConfig {
         queueService.allowUserA(5);
     }
 
-    // [시나리오 B Worker] 1초마다 체크하지만, "최대 3명" 유지만 함
+    // [시나리오 B Worker] 최대 3명 유지하고, 1분이  없애기
     @Scheduled(fixedDelay = 1000)
     public void workerScenarioB() {
         queueService.allowUserB(3);

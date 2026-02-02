@@ -1,6 +1,5 @@
 package jammy.com.redistest.domain.queue;
 
-import jammy.com.redistest.common.QueueStatusDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -32,23 +31,21 @@ public class QueueService {
     // 기본 로직: 넣고 -> 스케줄러가 바로 꺼내서 작업 -> 삭제
     // =====================================================================
 
-    // 1. 단순 작업 등록
     public void addSimpleTask(String username) {
         long timeScore = System.currentTimeMillis();
         redisTemplate.opsForZSet().add(SIMPLE_QUEUE_KEY, username, timeScore);
         log.info("[기존] 작업열 등록: {}", username);
     }
 
-    // 2. 단순 작업 처리 (스케줄러가 호출)
     public void processSimpleTask() {
         ZSetOperations.TypedTuple<Object> tuple = redisTemplate.opsForZSet().popMin(SIMPLE_QUEUE_KEY);
-        if (tuple == null) return; // 대기열 비어있음
+        if (tuple == null) return;
 
         String username = (String) tuple.getValue();
         log.info("[기존] 작업 처리 시작: {} (5초 소요)", username);
 
         try {
-            Thread.sleep(5000); // 작업 시늉
+            Thread.sleep(5000); // 5초 걸린다고 가정
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -57,7 +54,7 @@ public class QueueService {
 
 
     // =====================================================================
-    // [시나리오 A] 메서드 모음: Rate Limiter (단순 통과)
+    // [시나리오 A] 1초마다 5명씩 입장
     // =====================================================================
 
     public void registerQueueA(String username) {
@@ -69,7 +66,6 @@ public class QueueService {
         return getQueueStatus(username, WAIT_KEY_A, ACTIVE_KEY_A);
     }
 
-    // 스케줄러 A가 호출: 묻지도 따지지도 않고 count만큼 이동
     public void allowUserA(long count) {
         Set<Object> allowedUsers = redisTemplate.opsForZSet().range(WAIT_KEY_A, 0, count - 1);
         if (allowedUsers == null || allowedUsers.isEmpty()) return;
@@ -78,12 +74,12 @@ public class QueueService {
             String username = (String) user;
             redisTemplate.opsForSet().add(ACTIVE_KEY_A, username);
             redisTemplate.opsForZSet().remove(WAIT_KEY_A, username);
-            log.info("[Scenario A] 🚀 1초 경과! 사용자 입장시킴: {}", username);
+            log.info("[Scenario A] 1초 경과! 사용자 입장시킴: {}", username);
         }
     }
 
     // =====================================================================
-    // [시나리오 B] 메서드 모음: Capacity Limit (엄격한 정원제)
+    // [시나리오 B] 3명씩 로직 처리 -> 처리 완료누르면 대기열에 빠짐 (빈자리 있을때만 입장)
     // =====================================================================
 
     public void registerQueueB(String username) {
@@ -95,21 +91,16 @@ public class QueueService {
         return getQueueStatus(username, WAIT_KEY_B, ACTIVE_KEY_B);
     }
 
-    // 스케줄러 C가 호출: "빈자리"가 있을 때만 이동
     public void allowUserB(long maxCapacity) {
-        // 1. 현재 입장 인원 확인
         Long currentActive = redisTemplate.opsForSet().size(ACTIVE_KEY_B);
         if (currentActive == null) currentActive = 0L;
 
-        // 2. 빈자리 계산
         long availableSlots = maxCapacity - currentActive;
 
         if (availableSlots <= 0) {
-            // 자리가 없으면 아무도 입장 못함!
             return;
         }
 
-        // 3. 빈자리만큼만 이동
         Set<Object> allowedUsers = redisTemplate.opsForZSet().range(WAIT_KEY_B, 0, availableSlots - 1);
         if (allowedUsers == null || allowedUsers.isEmpty()) return;
 
@@ -117,15 +108,14 @@ public class QueueService {
             String username = (String) user;
             redisTemplate.opsForSet().add(ACTIVE_KEY_B, username);
             redisTemplate.opsForZSet().remove(WAIT_KEY_B, username);
-            log.info("[Scenario B] ✅ 빈자리 발생! 사용자 입장: {} (현재 {}/{})", username, currentActive + 1, maxCapacity);
+            log.info("[Scenario B] 빈자리 발생! 사용자 입장: {} (현재 {}/{})", username, currentActive + 1, maxCapacity);
         }
     }
 
-    // 사용자 퇴장 (빈자리 만들기)
     public void exitQueueB(String username) {
         redisTemplate.opsForSet().remove(ACTIVE_KEY_B, username);
-        redisTemplate.opsForZSet().remove(WAIT_KEY_B, username); // 혹시 대기열에 있다면 제거
-        log.info("[Scenario B] 🚪 사용자 퇴장: {}. (빈자리가 생겼습니다)", username);
+        redisTemplate.opsForZSet().remove(WAIT_KEY_B, username);
+        log.info("[Scenario B] 사용자 퇴장: {}. (빈자리가 생겼습니다)", username);
     }
 
 

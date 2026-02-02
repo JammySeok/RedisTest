@@ -1,6 +1,5 @@
 package jammy.com.redistest.domain.queue;
 
-import jammy.com.redistest.common.QueueStatusDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
