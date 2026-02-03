@@ -1,89 +1,218 @@
 import { useState, useEffect } from 'react';
 
+interface UserStatus {
+  name: string;
+  rank: number;
+  isAllowed: boolean;
+  message: string;
+}
+
 export default function ScenarioB() {
-  const [name, setName] = useState('');
-  const [status, setStatus] = useState<any>(null); 
-  const [polling, setPolling] = useState(false);
-  
-  // 퇴장시킬 유저 이름 (테스트용)
-  const [exitTarget, setExitTarget] = useState('');
+  const [inputName, setInputName] = useState('');
+  const [users, setUsers] = useState<string[]>([]); // 관리 중인 유저 이름 목록
+  const [statuses, setStatuses] = useState<Record<string, UserStatus>>({}); // 유저별 상태 정보
 
-  // 1. 대기열 등록 (더미 50명 넣고 나도 넣기)
-  const handleRegister = async () => {
-    // 먼저 꽉 채우기 위해 더미 10명 넣기
-    for(let i=0; i<10; i++) {
-        await fetch(`http://localhost:8080/scenario-b/enter?name=dummy_${i}`, { method: 'POST' });
+  // 1. 유저 추가 및 대기열 등록 (Enter)
+  const handleAddUser = async () => {
+    if (!inputName.trim()) return alert('유저 이름을 입력하세요.');
+    if (users.includes(inputName)) return alert('이미 대시보드에 존재하는 이름입니다.');
+
+    try {
+      // 서버에 대기열 진입 요청
+      await fetch(`http://localhost:8080/scenario-b/enter?name=${inputName}`, {
+        method: 'POST',
+      });
+
+      // 관리 목록에 추가
+      setUsers((prev) => [...prev, inputName]);
+      setInputName('');
+    } catch (err) {
+      console.error(err);
+      alert('대기열 진입 요청 실패');
     }
-    // 내 캐릭터 등록
-    await fetch(`http://localhost:8080/scenario-b/enter?name=${name}`, { method: 'POST' });
-    setPolling(true);
   };
 
-  // 2. 내 상태 확인 (폴링)
+  // 2. 유저 퇴장 시키기 (Exit)
+  const handleExit = async (username: string) => {
+    try {
+      await fetch(`http://localhost:8080/scenario-b/exit?name=${username}`, {
+        method: 'POST',
+      });
+      // 퇴장 후 리스트에서 바로 지우지 않고 상태 변화를 보여줍니다. (필요하면 삭제 버튼으로 제거)
+    } catch (err) {
+      console.error(err);
+      alert('퇴장 요청 실패');
+    }
+  };
+
+  // 3. 리스트에서 제거 (화면에서만 삭제)
+  const handleRemoveFromList = (username: string) => {
+    setUsers((prev) => prev.filter((u) => u !== username));
+    setStatuses((prev) => {
+      const next = { ...prev };
+      delete next[username];
+      return next;
+    });
+  };
+
+  // 4. 모든 유저 상태 주기적 조회 (Polling)
   useEffect(() => {
-    let interval: number;
-    if (polling) {
-      interval = setInterval(async () => {
-        const res = await fetch(`http://localhost:8080/scenario-b/status?name=${name}`);
-        const data = await res.json();
-        setStatus(data);
-        if (data.isAllowed) setPolling(false);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [polling, name]);
+    const fetchAllStatuses = async () => {
+      if (users.length === 0) return;
 
-  // 3. 누군가 퇴장 시키기 (빈자리 만들기)
-  const handleForceExit = async () => {
-    if(!exitTarget) return alert('퇴장시킬 유저 이름을 입력하세요 (예: dummy_0)');
-    
-    await fetch(`http://localhost:8080/scenario-c/exit?name=${exitTarget}`, { method: 'POST' });
-    alert(`${exitTarget} 퇴장 완료! 빈자리가 생겨서 대기열이 줄어들 겁니다.`);
-  };
+      const nextStatuses: Record<string, UserStatus> = {};
+
+      // 등록된 모든 유저의 상태를 병렬로 조회
+      await Promise.all(
+        users.map(async (name) => {
+          try {
+            const res = await fetch(`http://localhost:8080/scenario-b/status?name=${name}`);
+            const data = await res.json(); // { rank, isAllowed, message }
+            nextStatuses[name] = { name, ...data };
+          } catch (e) {
+            console.error(e);
+          }
+        })
+      );
+
+      setStatuses(nextStatuses);
+    };
+
+    // 1초마다 갱신
+    const interval = setInterval(fetchAllStatuses, 1000);
+    // 즉시 실행
+    fetchAllStatuses();
+
+    return () => clearInterval(interval);
+  }, [users]);
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h2>시나리오 C: 수용량 제한 (Capacity Limit)</h2>
-      <p>정원(5명)이 꽉 차면, 누군가 <strong>퇴장(Exit)</strong>해야 대기열이 줄어듭니다.</p>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <h2>시나리오 B: 대기열 관리 대시보드</h2>
+      <p>여러 유저를 등록하여 <strong>수용량(3명) 제한</strong>에 따른 대기열 작동을 확인하세요.</p>
 
-      <hr />
-      
-      {/* 본인 입장 영역 */}
-      <div>
-        <h3>1. 입장 신청</h3>
-        {!polling && !status?.isAllowed ? (
-          <>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="내 닉네임" />
-            <button onClick={handleRegister}>더미 10명과 함께 줄서기</button>
-          </>
+      {/* 유저 등록 컨트롤러 */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '10px', 
+        marginBottom: '30px', 
+        padding: '20px', 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <input
+          type="text"
+          value={inputName}
+          onChange={(e) => setInputName(e.target.value)}
+          placeholder="유저 이름 (예: User1)"
+          onKeyDown={(e) => e.key === 'Enter' && handleAddUser()}
+          style={{ flex: 1, padding: '10px', fontSize: '16px' }}
+        />
+        <button 
+          onClick={handleAddUser}
+          style={{ 
+            padding: '10px 20px', 
+            backgroundColor: '#007bff', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '4px', 
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+        >
+          + 대기열 등록
+        </button>
+      </div>
+
+      {/* 유저 리스트 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {users.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
+            등록된 유저가 없습니다. 위에서 유저를 추가해보세요!
+          </div>
         ) : (
-           <h3>{status?.isAllowed ? "🎉 서비스 이용 중 (입장 성공)" : `현재 대기 순번: ${status?.rank}번`}</h3>
+          users.map((name) => {
+            const status = statuses[name];
+            const isAllowed = status?.isAllowed;
+            const rank = status?.rank;
+            const isWaiting = rank && rank > 0;
+            const isExited = rank === -1 && !isAllowed; // 대기열에도 없고 입장도 안 한 상태
+
+            return (
+              <div 
+                key={name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '15px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  backgroundColor: isAllowed ? '#e6fffa' : (isWaiting ? '#fffbe6' : '#f1f3f5'),
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >
+                {/* 이름 및 상태 텍스트 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{name}</span>
+                  
+                  {isAllowed && (
+                    <span style={{ backgroundColor: '#28a745', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
+                      입장 완료 (Active)
+                    </span>
+                  )}
+                  {isWaiting && (
+                    <span style={{ backgroundColor: '#ffc107', color: 'black', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
+                      대기 {rank}번
+                    </span>
+                  )}
+                  {isExited && (
+                     <span style={{ backgroundColor: '#6c757d', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
+                      종료됨
+                    </span>
+                  )}
+                </div>
+
+                {/* 액션 버튼 */}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {isAllowed && (
+                    <button 
+                      onClick={() => handleExit(name)}
+                      style={{ 
+                        backgroundColor: '#dc3545', 
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '8px 16px', 
+                        borderRadius: '4px', 
+                        cursor: 'pointer' 
+                      }}
+                    >
+                      퇴장 (Exit)
+                    </button>
+                  )}
+                  
+                  {/* 리스트에서 제거 버튼 (옵션) */}
+                  <button 
+                    onClick={() => handleRemoveFromList(name)}
+                    style={{ 
+                      backgroundColor: 'transparent', 
+                      color: '#999', 
+                      border: '1px solid #ddd', 
+                      padding: '8px 12px', 
+                      borderRadius: '4px', 
+                      cursor: 'pointer' 
+                    }}
+                    title="목록에서 제거"
+                  >
+                    X
+                  </button>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
-
-      <hr />
-
-      {/* 퇴장 시뮬레이션 영역 */}
-      <div style={{ backgroundColor: '#ffecec', padding: '15px', borderRadius: '8px' }}>
-        <h3>2. 퇴장 시뮬레이터 (자리를 비워주세요)</h3>
-        <p>대기 순번이 줄어들지 않나요? 기존 입장자를 강제로 퇴장시켜보세요.</p>
-        <p>더미 이름: <code>dummy_0</code>, <code>dummy_1</code> ...</p>
-        
-        <input 
-          value={exitTarget} 
-          onChange={e => setExitTarget(e.target.value)} 
-          placeholder="퇴장시킬 이름 (예: dummy_0)" 
-        />
-        <button onClick={handleForceExit}>강제 퇴장시키기</button>
-      </div>
-      
-      {status?.isAllowed && (
-          <div style={{marginTop: '20px'}}>
-            <button onClick={() => { setExitTarget(name); handleForceExit(); }}>
-                나 스스로 작업 종료하고 나가기 (Exit)
-            </button>
-          </div>
-      )}
     </div>
   );
 }

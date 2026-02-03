@@ -12,6 +12,12 @@ public class WorkerConfig {
 
     private final QueueService queueService;
 
+    // 단순 작업 테스트
+    @Scheduled(fixedDelay = 1000)
+    public void workerSimple() {
+        queueService.processSimpleTask();
+    }
+
     // [시나리오 A Worker] 1초마다 무조건 5명 들여보냄 (기존 유저가 있든 말든)
     @Scheduled(fixedDelay = 1000)
     public void workerScenarioA() {

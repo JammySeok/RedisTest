@@ -70,7 +70,8 @@ export default function ScenarioA() {
   };
 
   const pass = () => {
-    navigate('/');
+    alert('입장이 완료되었습니다.');
+    window.location.reload();
   };
 
   return (
@@ -109,9 +110,9 @@ export default function ScenarioA() {
           
           {status.isAllowed ? (
             <div style={{ color: 'green', fontWeight: 'bold' }}>
-              <p style={{ fontSize: '20px' }}>🎉 드디어 입장이 허용되었습니다!</p>
+              <p style={{ fontSize: '20px' }}>입장이 가능합니다!</p>
               <button onClick={pass} style={{ padding: '15px 30px', fontSize: '18px', cursor: 'pointer', backgroundColor: 'green', color: 'white', border: 'none', borderRadius: '5px' }}>
-                서비스 입장하기 🚀
+                서비스 입장하기 
               </button>
             </div>
           ) : (
@@ -119,10 +120,6 @@ export default function ScenarioA() {
               <p style={{ fontSize: '24px', fontWeight: 'bold', color: 'red' }}>
                 현재 대기 순번: {status.rank}번
               </p>
-              <p>뒤에 있는 스케줄러가 1초에 2명씩 입장시키고 있습니다...</p>
-              <div style={{ width: '100%', backgroundColor: '#eee', height: '20px', borderRadius: '10px' }}>
-                 <div style={{ width: '50%', backgroundColor: '#007bff', height: '100%', borderRadius: '10px', animation: 'pulse 1s infinite' }}></div>
-              </div>
             </div>
           )}
         </div>

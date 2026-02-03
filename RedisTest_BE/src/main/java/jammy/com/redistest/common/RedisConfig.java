@@ -18,21 +18,25 @@ public class RedisConfig {
     @Value("${spring.data.redis.port}")
     private int port;
 
+    // Redis 연결 팩토리 생성 (client = Lettuce)
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         return new LettuceConnectionFactory(host, port);
     }
 
+    // 데이터 직렬화
     @Bean
     public RedisTemplate<String, Object> redisTemplate() {
         RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
-        redisTemplate.setConnectionFactory(redisConnectionFactory());
+        redisTemplate.setConnectionFactory(redisConnectionFactory());  // 팩토리 연결
 
-        redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        // Key : Value 데이터 직렬화
+        redisTemplate.setKeySerializer(new StringRedisSerializer());  // 일반 문자열로 저장
+        redisTemplate.setValueSerializer(new GenericJackson2JsonRedisSerializer());  // JSON 문자열로 변환해서 저장
 
-        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-        redisTemplate.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        // Hash Operation 사용 시 Key:Value 직렬화
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());  // 일반 문자열로 저장
+        redisTemplate.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());  // JSON 문자열로 변환해서 저장
 
         return redisTemplate;
     }
